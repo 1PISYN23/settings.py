@@ -1,11 +1,12 @@
-## ⚙️ Конфигурация проекта (Settings & Celery)
+## ⚙️ Конфигурация проекта (Settings & Celery с python-decouple)
 
-В этом разделе собраны эталонные настройки Django, DRF, Celery и переменных окружения для быстрого копирования.
+В этом разделе собраны настройки Django, DRF и Celery с использованием `python-decouple` для управления конфигурацией.
 
-### 📝 Переменные окружения (.env)
+### 📝 Файл переменных окружения (.env)
 ```env
 # Django
 SECRET_KEY=your_secret_key_here
+DEBUG=True
 
 # PostgreSQL
 POSTGRES_DB=enfbd
@@ -38,23 +39,28 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
 ### 🛠 Настройки Django (settings.py)
 
-#### База данных и окружение
+#### Инициализация и Базовая конфигурация
 ```python
 import os
-from decouple import config # или python-dotenv
+from pathlib import Path
+from decouple import config
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY')
+DEBUG = config('DEBUG', default=False, cast=bool)
+```
 
+#### База данных (PostgreSQL)
+```python
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('POSTGRES_DB'),
-        'USER': os.getenv('POSTGRES_USER'),
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD'),
-        'HOST': os.getenv('POSTGRES_HOST', 'db'),
-        'PORT': os.getenv('POSTGRES_PORT', '5432'),
+        'NAME': config('POSTGRES_DB'),
+        'USER': config('POSTGRES_USER'),
+        'PASSWORD': config('POSTGRES_PASSWORD'),
+        'HOST': config('POSTGRES_HOST', default='db'),
+        'PORT': config('POSTGRES_PORT', default='5432'),
         'ATOMIC_REQUESTS': True,
     }
 }
@@ -80,7 +86,7 @@ else:
         'http://127.0.0.1:3000',
     ]
 
-# Безопасность
+# Настройки безопасности
 SECURE_BROWSER_XSS_FILTER = True  # Защита от XSS-атак
 SECURE_CONTENT_TYPE_NOSNIFF = True # Запрет MINE-типов
 X_FRAME_OPTIONS = 'Deny'            # Защита от кликджекинга
@@ -111,12 +117,12 @@ REST_FRAMEWORK = {
 ```python
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
-# Stripe
+# Stripe настройки
 STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
 
-# Email
+# Email настройки
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='localhost')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
@@ -147,15 +153,15 @@ CELERY_BEAT_SCHEDULE = {
     },
     # 'cleanup-old-payments': {
     #     'task': 'apps.payment.tasks.cleanup_old_payments',
-    #     'schedule': 604800.0,
+    #     'schedule': 604800.0, # Каждую неделю
     # },
     # 'cleanup-old-webhook-events': {
     #     'task': 'apps.payment.tasks.cleanup_old_webhook_events',
-    #     'schedule': 86400.0,
+    #     'schedule': 86400.0, # Каждый день
     # },
     # 'retry-failed-webhook-events': {
     #     'task': 'apps.payment.tasks.retry_failed_webhook_events',
-    #     'schedule': 3600.0,
+    #     'schedule': 3600.0, # Каждый час
     # },
 }
 ```
@@ -169,7 +175,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 
 urlpatterns = [
-    # Ваши маршруты здесь
+    # Маршруты приложений
 ]
 
 if settings.DEBUG:
@@ -178,14 +184,13 @@ if settings.DEBUG:
 
 ---
 
-### 🦺 Инициализация Celery в проекте
+### 🦺 Инициализация Celery
 
 #### `config/celery.py`
 ```python
 import os
 from celery import Celery
 
-# Установка переменной окружения для Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 
 app = Celery('config')
@@ -193,7 +198,7 @@ app = Celery('config')
 # Настройка из settings.py с пространством имен CELERY
 app.config_from_object('django.conf:settings', namespace='CELERY')
 
-# Автоматический поиск задач в приложениях
+# Автопоиск задач в приложениях проекта
 app.autodiscover_tasks()
 
 @app.task(bind=True)
